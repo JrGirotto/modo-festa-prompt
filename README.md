@@ -1,4 +1,4 @@
-### Prompt de Produção Avançado: App "Modo Festa" (Legislação BR)
+### Prompt de Produção Avançado: App "Modo Festa" (Legislação BR & Motor de Cálculo)
 
 Crie um aplicativo web full-stack profissional, responsivo (mobile-first) e esteticamente impecável chamado "Modo Festa", focado em redução de danos, conscientização e monitoramento preditivo de alcoolemia.
 
@@ -39,7 +39,7 @@ O aplicativo deve monitorar e aplicar estritamente os limites estabelecidos pelo
 ### Dashboard Principal (Live Session)
 
 *   **Radial Progress / Gauge Chart**: Gráfico circular animado que mostra a taxa estimada de álcool no sangue convertida para mg/L (miligramas por litro de ar alveolar).
-*   **Indicador de Tendência**: Seta indicando se o álcool está em curva de subida (absorção gástrica ativa) ou descida (metabolização).
+*   **Indicador de Tendência**: Seta indicando se o álcool está em curva de subida (absorção gástrica activa) ou descida (metabolização).
 *   **Feed de Alertas Dinâmicos**: Cards que mudam de cor (Verde para seguro, Amarelo para atenção, Vermelho para Impedido de Dirigir).
 *   **Botão de Resgate de Mobilidade**: Sempre que o usuário passar de 0,04 mg/L, exiba um botão proeminente: *"Chamar Carro por Aplicativo (Uber/99)"*.
 
@@ -54,30 +54,87 @@ O aplicativo deve monitorar e aplicar estritamente os limites estabelecidos pelo
 
 * * *
 
-### 4\. MOTOR DE CÁLCULO (WIDMARK REFINADO)
+### 4\. SCRIPT DO MOTOR DE CÁLCULO (IMPLEMENTAÇÃO COMPLETA)
 
-*   Use a Fórmula de Widmark Modificada: 
+Implemente a lógica de cálculo em segundo plano utilizando a seguinte referência JavaScript/TypeScript para atualizar o estado global do app a cada 60 segundos ou a cada novo input:
+
+typescript
+
+    interface UserProfile {
+      weightKg: number;
+      gender: 'male' | 'female';
+      isDriving: boolean;
+    }
     
-    ![](data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)𝐵𝐴𝐶
+    interface LogEvent {
+      timestamp: Date;
+      type: 'alcohol' | 'food';
+      volumeMl?: number;
+      alcoholPercentage?: number; // Ex: 0.05 para 5%
+      foodType?: 'snack' | 'meal';
+    }
     
-    ![](data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)\=𝐴𝑟×𝑊
+    function calculateAlcoolemia(profile: UserProfile, logs: LogEvent[]): { 
+      bacMgL: number; 
+      status: 'safe' | 'infraction' | 'crime';
+      timeToSoberHours: number;
+    } {
+      if (logs.length === 0) return { bacMgL: 0, status: 'safe', timeToSoberHours: 0 };
     
-    ![](data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)−
+      const now = new Date();
+      const firstLogTime = new Date(logs[0].timestamp);
+      const totalHoursElapsed = (now.getTime() - firstLogTime.getTime()) / (1000 * 60 * 60);
     
-    ![](data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)(
+      // 1. Calcular total de álcool ingerido em gramas
+      let totalAlcoholGrams = 0;
+      let absorptionDelayMinutes = 0;
     
-    ![](data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)𝛽
+      logs.forEach(log => {
+        if (log.type === 'alcohol' && log.volumeMl && log.alcoholPercentage) {
+          // Gramas de álcool = Volume (ml) * (Teor / 100) * Densidade do Álcool (0.8)
+          totalAlcoholGrams += log.volumeMl * log.alcoholPercentage * 0.8;
+        } else if (log.type === 'food') {
+          // Alimentos atrasam o pico de absorção
+          absorptionDelayMinutes += log.foodType === 'meal' ? 45 : 20;
+        }
+      });
     
-    ![](data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==)×𝑡
+      // Ajusta o tempo decorrido considerando o atraso de absorção gástrica
+      const adjustedHours = Math.max(0, totalHoursElapsed - (absorptionDelayMinutes / 60));
     
-    ![](data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==))
+      // 2. Coeficiente de distribuição de água (r) e Taxa de eliminação (Beta)
+      const r = profile.gender === 'male' ? 0.68 : 0.55;
+      const betaPerHour = 0.015; // g/% por hora no sangue
     
-    *   A = Massa de álcool puro consumida em gramas (Volume em ml × Teor Alcoólico × 0.8 de densidade).
-    *   r = Fator de distribuição de água (0.68 para homens, 0.55 para mulheres).
-    *   W = Peso corporal em gramas.
-    *   β = Taxa de eliminação do fígado (Média de 0.015g/% por hora).
-*   **Conversão para Bafômetro (Ar Alveolar)**: Divida o resultado de BAC por 2 para aproximar a leitura g/L de sangue para mg/L de ar expirado, alinhando com a escala dos bafômetros brasileiros.
-*   **Fator Estômago Cheio**: Caso o usuário registre alimentação, atrase o pico de absorção do álcool no código em 45 minutos no cálculo da curva, simulando o retardo do esvaziamento gástrico.
+      // 3. Fórmula de Widmark (Concentração de Álcool no Sangue em g/L)
+      let bacGramPerLiterSangue = (totalAlcoholGrams / (r * profile.weightKg)) - (betaPerHour * adjustedHours);
+      bacGramPerLiterSangue = Math.max(0, bacGramPerLiterSangue);
+    
+      // 4. Conversão Brasileira para Ar Alveolar (mg/L do Bafômetro)
+      // A lei brasileira adota a relação de equivalência aproximada de 1 g/L de sangue = 0.45 a 0.5 mg/L de ar
+      const bacMgL = Number((bacGramPerLiterSangue * 0.45).toFixed(2));
+    
+      // 5. Definição de Status Legal com base no CTB brasileiro
+      let status: 'safe' | 'infraction' | 'crime' = 'safe';
+      
+      if (profile.isDriving && bacMgL > 0) {
+        status = 'infraction'; // Tolerância zero se marcou que vai dirigir
+      }
+      
+      if (bacMgL >= 0.05 && bacMgL <= 0.33) {
+        status = 'infraction'; // Art. 165 CTB
+      } else if (bacMgL >= 0.34) {
+        status = 'crime';      // Art. 306 CTB
+      }
+    
+      // 6. Estimativa de tempo para zerar (Sóbrio)
+      const timeToSoberHours = bacGramPerLiterSangue > 0 ? Number((bacGramPerLiterSangue / betaPerHour).toFixed(1)) : 0;
+    
+      return { bacMgL, status, timeToSoberHours };
+    }
+    
+
+Use o código com cuidado.
 
 * * *
 
